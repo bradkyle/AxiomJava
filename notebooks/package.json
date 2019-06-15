@@ -1,0 +1,10 @@
+{
+  "name": "notebooks",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "avsc": "^5.4.10",
+    "snappy": "^6.1.2"
+  }
+}

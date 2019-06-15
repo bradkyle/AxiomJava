@@ -1,0 +1,14 @@
+mvn -X compile exec:java \
+-Dexec.mainClass=com.axiom.pipeline.AxiomPipeline \
+-Dexec.cleanupDaemonThreads=false \
+-Dexec.args=" \
+--streaming=false \
+--project=axiom-239308 \
+--stagingLocation=gs://axiom-239308-test/temp/ \
+--tempLocation=gs://axiom-239308-test/staging/ \
+--inputDirectory=gs://axiom-239308-coldline/raw_output/ \
+--autoscalingAlgorithm=THROUGHPUT_BASED \
+--outputDataset=aggregations \
+--numWorkers=25 \
+--maxNumWorkers=55 \
+--runner=DataflowRunner"

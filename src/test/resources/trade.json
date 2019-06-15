@@ -1,0 +1,22 @@
+{
+    "event_id": ["okex_spot", "trade", "XLM", "USDT", "1557528899745"], 
+    "event_time": 1557528899.745, 
+    "event_datetime": "2019-05-10T22:54:59+0000",
+    "event_type": "trade",
+    "event_time_ms": 1557528899745, 
+    "produced_time": 1557528900.000574, 
+    "produced_datetime": "2019-05-10T22:55:00", 
+    "exchange": "okex_spot", 
+    "symbol": "XLMUSDT", 
+    "quote_asset": "USDT", 
+    "base_asset": "XLM", 
+    "market_type": "spot", 
+    "trade_time": null, 
+    "quantity": 156.173,
+    "price": 0.0924, 
+    "side": "sell", 
+    "is_maker": null,
+    "order_type": null, 
+    "trade_id": 74542649,
+    "__faust": {"ns": "models.trade.Trade"}
+}

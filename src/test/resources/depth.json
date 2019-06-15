@@ -1,0 +1,27 @@
+    {
+    "event_id": ["okex_spot", "depthUpdate", "PST", "USDT", "1557528899859"],
+    "event_time": 1557528899.859, 
+    "event_datetime": "2019-05-10T22:54:59+0000", 
+    "event_type": "depthUpdate", 
+    "event_time_ms": 1557528899859, 
+    "produced_time": 1557528900.1299477, 
+    "produced_datetime": "2019-05-10T22:55:00", 
+    "exchange": "okex_spot", 
+    "symbol": "PSTUSDT", 
+    "quote_asset": "USDT", 
+    "base_asset": "PST", 
+    "market_type": "spot", 
+    "first_update_id": null, 
+    "final_update_id": null, 
+    "checksum": -580333139, 
+    "bids": [
+        {"level": null, "norm_quantity": null, "quantity": 1105.957, "price": 0.086, "num_orders": 1, "force_liquidated_orders": null, "__faust": {"ns": "models.depth.DepthLevel"}}, 
+        {"level": null, "norm_quantity": null, "quantity": 2200.0, "price": 0.0852, "num_orders": 1, "force_liquidated_orders": null, "__faust": {"ns": "models.depth.DepthLevel"}}
+        ], 
+    "asks": [
+        {"level": null, "norm_quantity": null, "quantity": 7378.139, "price": 0.0907, "num_orders": 2, "force_liquidated_orders": null, "__faust": {"ns": "models.depth.DepthLevel"}}, 
+        {"level": null, "norm_quantity": null, "quantity": 51.9, "price": 0.0908, "num_orders": 1, "force_liquidated_orders": null, "__faust": {"ns": "models.depth.DepthLevel"}}, 
+        {"level": null, "norm_quantity": null, "quantity": 0.0, "price": 0.091, "num_orders": 0, "force_liquidated_orders": null, "__faust": {"ns": "models.depth.DepthLevel"}}
+    ], 
+    "__faust": {"ns": "models.depth.DepthUpdate"}
+    }
