@@ -23,6 +23,8 @@ import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.PCollectionTuple;
+import java.time.format.DateTimeFormatter;
+import org.apache.beam.sdk.transforms.windowing.PaneInfo;
 
 import com.axiom.pipeline.parsers.TradeParser;
 import com.axiom.pipeline.parsers.DepthParser;
@@ -72,12 +74,23 @@ import org.apache.beam.sdk.state.MapState;
 import org.apache.beam.sdk.state.CombiningState;
 import java.util.stream.Stream;
 
-import com.axiom.pipeline.core.StatefulCombineToBigquery;
-
 import com.axiom.pipeline.datum.Event;
 
+import org.apache.beam.sdk.transforms.Distinct;
+import org.apache.beam.sdk.transforms.SerializableFunction;
+import org.apache.beam.sdk.io.fs.ResourceId;
+import org.apache.beam.sdk.io.FileBasedSink;
+import org.apache.beam.sdk.options.ValueProvider.NestedValueProvider;
+import com.axiom.pipeline.io.EventDynamicDestinations;
+import org.apache.beam.sdk.io.FileIO.Write.FileNaming;
+import org.apache.beam.sdk.transforms.windowing.PaneInfo;
+import org.apache.beam.sdk.io.Compression;
+import org.apache.beam.sdk.io.FileIO.Write.FileNaming;
+import org.apache.beam.sdk.coders.StringUtf8Coder;
+import org.apache.beam.sdk.io.FileIO;
+
 public class AxiomPartition {
-    private static final Logger logger = LoggerFactory.getLogger(AxiomPartiton.class);
+    private static final Logger logger = LoggerFactory.getLogger(AxiomPartition.class);
 
     private static final CodecFactory DEFAULT_CODEC = CodecFactory.deflateCodec(9);
 
@@ -139,7 +152,9 @@ public class AxiomPartition {
         // ==================================================================>
         // Merged
         // ==================================================================>
-        // Read trades from trades directory on google cloud storage        
+        // Read trades from trades directory on google cloud storage      
+        
+        
 
         PCollectionList<Event> collectionList = PCollectionList.of(validTrades).and(validDepths);
         PCollection<Event> mergedCollections = collectionList.apply(Flatten.<Event>pCollections());
@@ -148,31 +163,27 @@ public class AxiomPartition {
             "AddTimestamps",
             WithTimestamps.of((Event event) -> new Instant(event.getTime()))
         ).apply(
-            "WindowEvents"
-            Window.<Row>into(FixedWindows.of(interval))
+            "WindowEvents",
+            Window.<Event>into(FixedWindows.of(Duration.standardMinutes(5)))
         ).apply(
             "FilterDuplicateEvents",
             Distinct.<Event>create()
         ).apply(
-            "WriteEventsToAvro", 
-            AvroIO.<Integer>write(Event.class)
-            .to(new EventDynamicAvroDestinations(
-                options.getOutputDirectory()
-            ))
-            .withTempDirectory(
-                NestedValueProvider.of(
-                    options.getAvroTempDirectory(),
-                    (SerializableFunction<String, ResourceId>) input -> FileBasedSink.convertToFileResourceIfPossible(input)
-                )
-            )
-            .withWindowedWrites()
-            .withNumShards(options.getNumShards())
-        ));
+            FileIO.<String, Event>writeDynamic()
+                .by((SerializableFunction<Event, String>) input -> input.getDir())
+                .via(AvroIO.sink(Event.class))
+                .to(options.getOutputDirectory())
+                .withNaming(key -> FileIO.Write.defaultNaming(key, ".avro"))
+                .withDestinationCoder(StringUtf8Coder.of())
+                // .withTempDirectory(String.format("gs://bucket/tmp%s/%s/", suffix, currentMillisString))
+                .withNumShards(1)
+        );
 
         
         // write to file
         // Execute the pipeline and return the result.
         return p.run();
+    
     }
 
 }

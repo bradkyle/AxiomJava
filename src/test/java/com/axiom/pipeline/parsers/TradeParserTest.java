@@ -86,6 +86,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
+import com.axiom.pipeline.datum.Event;
+
 public class TradeParserTest {
     private static final Logger logger = LoggerFactory.getLogger(TradeParserTest.class);
 
@@ -113,13 +115,13 @@ public class TradeParserTest {
 
         PCollectionTuple results = TradeParser.process(stream);
 
-        PCollection<Row> valid = results.get(TradeParser.VALID);
+        PCollection<Event> valid = results.get(TradeParser.VALID);
         PCollection<Failure> failures = results.get(TradeParser.FAILURE);
 
-        Valid<Row> tradeValidator = new Valid<Row>((datum) -> {
-                assertNotNull(datum.getString("symbol"));
-                assertTrue(datum.getString("exchange").equals("okex_spot"));
-                assertTrue(datum.getString("symbol").equals("XLMUSDT"));
+        Valid<Event> tradeValidator = new Valid<Event>((datum) -> {
+                assertNotNull(datum.getSymbol());
+                assertTrue(datum.getExchange().equals("okex_spot"));
+                assertTrue(datum.getSymbol().equals("XLMUSDT"));
                 // assertNotNull(datum.getTimestamp());
                 // assertNotNull(datum.getTweetId());
                 // assertNotNull(datum.getTweetLang());

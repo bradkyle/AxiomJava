@@ -37,11 +37,13 @@ public class DepthParser extends DoFn<AvroPubsubMessage, Event> {
                         public void processElement(ProcessContext context) {
                             try {
                                 AvroPubsubMessage msg = context.element();
-                                HashMap<String,Object> depth = Json.serializer().toMap(
-                                                msg.getPayload()
-                                );
-                                gen_level_updates(depth, "ask", context, schema);
-                                gen_level_updates(depth, "bid", context, schema);                                    
+
+                                // System.out.println(msg.getPayload().getMessage());
+
+                                HashMap<String,Object> depth = Json.serializer().toMap(msg.getPayload());
+
+                                gen_level_updates(depth, "ask", context);
+                                gen_level_updates(depth, "bid", context);                                    
 
                             } catch (JsonException e) {
                                 fail(e, context);
@@ -57,13 +59,14 @@ public class DepthParser extends DoFn<AvroPubsubMessage, Event> {
                     ));
      }
 
-    protected static Void gen_level_updates(HashMap<String, Object> depth, String side, ProcessContext context, Schema schema) {
+    protected static Void gen_level_updates(HashMap<String, Object> depth, String side, ProcessContext context) {
         ArrayList<HashMap<String, Object>> levels =  ((ArrayList<HashMap<String, Object>>) depth.get(side+"s"));
         if (levels.size() > 0) {
             for (HashMap<String, Object> level : levels) {
                 Double price = new Double(level.get("price").toString());
                 Double quantity = price * new Double(level.get("quantity").toString());
-                context.output(new Event(
+
+                Event event = new Event(
                     depth.get("exchange").toString(),
                     "levelUpdate",
                     depth.get("quote_asset").toString(),
@@ -72,7 +75,9 @@ public class DepthParser extends DoFn<AvroPubsubMessage, Event> {
                     quantity,
                     price,
                     side
-                ));
+                );
+
+                context.output(VALID, event);
             }
         }
         return null;
@@ -81,7 +86,8 @@ public class DepthParser extends DoFn<AvroPubsubMessage, Event> {
     protected static Void fail(Exception e, ProcessContext c) {
         AvroPubsubMessage msg = c.element();
         Failure failure = new Failure(
-            e, msg.toString()
+            e, 
+            msg.toString()
         );
         logger.error(failure.toString());
         c.output(FAILURE, failure);

@@ -160,6 +160,9 @@ import com.google.api.services.bigquery.model.TableRow;
 import static com.axiom.pipeline.util.TestUtils.Valid;
 import org.apache.beam.sdk.transforms.Count;
 
+import org.apache.beam.sdk.coders.AvroCoder;
+import com.axiom.pipeline.datum.Event;
+
 public class StatefulCombineTest {
     private static final Logger logger = LoggerFactory.getLogger(StatefulCombineTest.class);
     private static final Duration ALLOWED_LATENESS = Duration.standardHours(1);
@@ -195,40 +198,36 @@ public class StatefulCombineTest {
 
     /** Some example users, on two separate teams. */
     private enum TestEvent {
-        TRADE_ONE("trade", "okex_spot", "BTC", "ETH", "ETHBTC", 55.0, 44.0, "buy"),
-        TRADE_TWO("trade", "okex_spot", "BTC", "ETH", "ETHBTC", 5.0, 4.0, "buy"),
-        TRADE_THREE("trade", "okex_spot", "BTC", "ETH", "ETHBTC", 55.0, 44.0, "sell"),
-        TRADE_FOUR("trade", "okex_spot", "BTC", "ETH", "ETHBTC", 55.0, 44.0, "sell"),
-        BID_ONE("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 5.0, 4.0, "bid"),
-        BID_TWO("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 6.0, 5.0, "bid"),
-        BID_THREE("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 7.0, 6.0, "bid"),
-        BID_FOUR("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 8.0, 7.0, "bid"),
-        BID_FIVE("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 0.0, 4.0, "bid"),
-        BID_SIX("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 1.0, 5.0, "bid"),
-        ASK_ONE("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 5.0, 4.0, "ask"),
-        ASK_TWO("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 6.0, 5.0, "ask"),
-        ASK_THREE("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 7.0, 6.0, "ask"),
-        ASK_FOUR("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 8.0, 7.0, "ask"),
-        ASK_FIVE("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 0.0, 4.0, "ask"),
-        ASK_SIX("levelUpdate", "okex_spot", "BTC", "ETH", "ETHBTC", 1.0, 5.0, "ask");
+        TRADE_ONE("trade", "okex_spot", "BTC", "ETH", 55.0, 44.0, "buy"),
+        TRADE_TWO("trade", "okex_spot", "BTC", "ETH", 5.0, 4.0, "buy"),
+        TRADE_THREE("trade", "okex_spot", "BTC", "ETH", 55.0, 44.0, "sell"),
+        TRADE_FOUR("trade", "okex_spot", "BTC", "ETH", 55.0, 44.0, "sell"),
+        BID_ONE("levelUpdate", "okex_spot", "BTC", "ETH", 5.0, 4.0, "bid"),
+        BID_TWO("levelUpdate", "okex_spot", "BTC", "ETH", 6.0, 5.0, "bid"),
+        BID_THREE("levelUpdate", "okex_spot", "BTC", "ETH", 7.0, 6.0, "bid"),
+        BID_FOUR("levelUpdate", "okex_spot", "BTC", "ETH", 8.0, 7.0, "bid"),
+        BID_FIVE("levelUpdate", "okex_spot", "BTC", "ETH", 0.0, 4.0, "bid"),
+        BID_SIX("levelUpdate", "okex_spot", "BTC", "ETH", 1.0, 5.0, "bid"),
+        ASK_ONE("levelUpdate", "okex_spot", "BTC", "ETH", 5.0, 4.0, "ask"),
+        ASK_TWO("levelUpdate", "okex_spot", "BTC", "ETH", 6.0, 5.0, "ask"),
+        ASK_THREE("levelUpdate", "okex_spot", "BTC", "ETH", 7.0, 6.0, "ask"),
+        ASK_FOUR("levelUpdate", "okex_spot", "BTC", "ETH", 8.0, 7.0, "ask"),
+        ASK_FIVE("levelUpdate", "okex_spot", "BTC", "ETH", 0.0, 4.0, "ask"),
+        ASK_SIX("levelUpdate", "okex_spot", "BTC", "ETH", 1.0, 5.0, "ask");
 
         private final String eventType; 
         private final String exchange; 
         private final String quote_asset; 
         private final String base_asset; 
-        private final String symbol; 
         private final Double quantity; 
         private final Double price; 
         private final String side; 
-        private final String event_id; 
-        private final String partition_id; 
 
         TestEvent(
             String eventType, 
             String exchange, 
             String quote_asset, 
             String base_asset, 
-            String symbol, 
             Double quantity, 
             Double price, 
             String side
@@ -239,25 +238,9 @@ public class StatefulCombineTest {
             this.exchange=exchange; 
             this.quote_asset=quote_asset; 
             this.base_asset=base_asset; 
-            this.symbol=symbol; 
             this.quantity=quantity; 
             this.price=price; 
             this.side=side; 
-            this.event_id= String.join(
-                "_", 
-                exchange, 
-                quote_asset, 
-                base_asset, 
-                eventType, 
-                "14252425",
-                randomAlphaNumeric(5)
-            );
-            this.partition_id=String.join(
-                "_", 
-                exchange, 
-                quote_asset, 
-                base_asset
-            );; 
         }
 
         public String getEventType(){
@@ -276,24 +259,12 @@ public class StatefulCombineTest {
             return this.base_asset;
         }
 
-        public String getSymbol(){
-            return this.symbol;
-        }
-
         public Double getQuantity(){
             return this.quantity;
         }
 
         public Double getPrice(){
             return this.price;
-        }
-
-        public String getId(){
-            return this.event_id;
-        }
-
-        public String getPartition(){
-            return this.partition_id;
         }
 
         public String getSide(){
@@ -306,8 +277,8 @@ public class StatefulCombineTest {
     @Category(NeedsRunner.class)
     public void testStatefulCombine() throws Exception {
 
-        TestStream<Row> createEvents =
-            TestStream.create(RowCoder.of(SCHEMA))
+        TestStream<Event> createEvents =
+            TestStream.create(AvroCoder.of(Event.class))
                 // Start at the epoch
                 .advanceWatermarkTo(baseTime)
                 // add some elements ahead of the watermark
@@ -345,6 +316,14 @@ public class StatefulCombineTest {
                 5
             ));
 
+        // PCollection<String> stresults = results.apply("ConvertToString", ParDo.of(new DoFn<TableRow, String>() {
+        //     @ProcessElement
+        //     public void processElement(ProcessContext c) {
+        //         System.out.println(c.element().toString());
+        //         c.output(c.element().toString());
+        //     }
+        // }));
+
         Valid<TableRow> tableRowValidator = new Valid<TableRow>((datum) -> {
                 assertNotNull(datum.get("symbol"));
                 assertTrue(datum.get("exchange").equals("okex_spot"));
@@ -352,7 +331,18 @@ public class StatefulCombineTest {
                 return null;
         });
 
+        // Valid<String> tableRowStringValidator = new Valid<String>((datum) -> {
+        //         System.out.println(datum);
+        //         assertNotNull(datum);
+        //         return null;
+        // });
+
         // long num = 1;
+
+        // PAssert
+        //     .that(results)
+        //     .inOnTimePane(new IntervalWindow(baseTime, WINDOW_DURATION))
+        //     .satisfies(tableRowValidator.getFn());
 
         // PAssert.thatSingleton(results.apply("Count", Count.globally()))
         //     .inOnTimePane(new IntervalWindow(baseTime, WINDOW_DURATION))
@@ -362,28 +352,25 @@ public class StatefulCombineTest {
         //     .inOnTimePane(new IntervalWindow(baseTime, WINDOW_DURATION))
         //     .satisfies(tableRowValidator.getFn());
  
+        // PAssert.that(results).satisfies(tableRowValidator.getFn());
         TEST_PIPELINE.run().waitUntilFinish();
     }
 
     
-    private TimestampedValue<Row> event(TestEvent event, Duration baseTimeOffset) {
+    private TimestampedValue<Event> event(TestEvent e, Duration baseTimeOffset) {
 
-        Row trade = Row.withSchema(SCHEMA)
-            .addValues(
-                event.getEventType(),
-                event.getExchange(),
-                event.getQuote(),
-                event.getBase(),
-                event.getSymbol(),
+        Event event = new Event(
+                e.getExchange(),
+                e.getEventType(),
+                e.getQuote(),
+                e.getBase(),
                 baseTime.plus(baseTimeOffset).getMillis(),
-                event.getQuantity(),
-                event.getPrice(),
-                event.getSide(),
-                event.getId(),
-                event.getPartition()
-            ).build();
+                e.getQuantity(),
+                e.getPrice(),
+                e.getSide()
+        );
 
-        return TimestampedValue.of(trade, baseTime.plus(baseTimeOffset));
+        return TimestampedValue.of(event, baseTime.plus(baseTimeOffset));
     }
 
 }

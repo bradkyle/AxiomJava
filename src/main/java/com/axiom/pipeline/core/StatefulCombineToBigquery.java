@@ -74,10 +74,11 @@ import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Arrays;
+import com.axiom.pipeline.datum.Event;
 
 import com.axiom.pipeline.core.StatefulCombine;
 
-public class StatefulCombineToBigquery extends PTransform<PCollection<Row>, PCollection<TableRow>> {
+public class StatefulCombineToBigquery extends PTransform<PCollection<Event>, PCollection<TableRow>> {
     private static final Logger logger = LoggerFactory.getLogger(StatefulCombine.class);
 
     final String projectId;
@@ -116,7 +117,7 @@ public class StatefulCombineToBigquery extends PTransform<PCollection<Row>, PCol
     }
 
     @Override
-    public PCollection<TableRow> expand(PCollection<Row> mergedCollections){
+    public PCollection<TableRow> expand(PCollection<Event> mergedCollections){
 
         PCollection<TableRow> aggregation = mergedCollections.apply(
                 "StatefulAggregation", 

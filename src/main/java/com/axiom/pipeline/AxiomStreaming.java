@@ -75,9 +75,10 @@ import java.util.stream.Stream;
 import com.axiom.pipeline.core.StatefulCombineToBigquery;
 
 import com.axiom.pipeline.datum.Event;
+import com.axiom.pipeline.datum.AvroPubsubMessage;
 
-public class AxiomPartition {
-    private static final Logger logger = LoggerFactory.getLogger(AxiomPartiton.class);
+public class AxiomStreaming {
+    private static final Logger logger = LoggerFactory.getLogger(AxiomStreaming.class);
 
     private static final CodecFactory DEFAULT_CODEC = CodecFactory.deflateCodec(9);
 
@@ -109,10 +110,10 @@ public class AxiomPartition {
         // ==================================================================>
         // Read trades from trades directory on google cloud storage        
 
-        PCollection<PubsubMessage> depthStream = p.apply(
+        PCollection<AvroPubsubMessage> depthStream = p.apply(
             "Read Depth Events",
-            PubsubIO.readMessagesWithAttributes().fromTopic(options.getInputTopic())
-        )
+            PubsubIO.readMessagesWithAttributes().fromTopic("depths")
+        ).apply("Map Depths to Archive", ParDo.of(new PubsubMessageToArchiveDoFn()));
 
         PCollectionTuple depthResults = DepthParser.process(depthStream);
         PCollection<Event> validDepths = depthResults.get(DepthParser.VALID);
@@ -123,10 +124,10 @@ public class AxiomPartition {
         // ==================================================================>
         // Read trades from trades directory on google cloud storage        
         
-        PCollection<PubsubMessage> tradeStream = p.apply(
-            "Read Depth Events",
-            PubsubIO.readMessagesWithAttributes().fromTopic(options.getInputTopic())
-        )
+        PCollection<AvroPubsubMessage> tradeStream = p.apply(
+            "Read Trades Events",
+            PubsubIO.readMessagesWithAttributes().fromTopic("trades")
+        ).apply("Map Trades to Archive", ParDo.of(new PubsubMessageToArchiveDoFn()));
         
         PCollectionTuple tradeResults = TradeParser.process(tradeStream);
         PCollection<Event> validTrades = tradeResults.get(TradeParser.VALID);
@@ -139,17 +140,39 @@ public class AxiomPartition {
 
         PCollectionList<Event> collectionList = PCollectionList.of(validTrades).and(validDepths);
         PCollection<Event> mergedCollections = collectionList.apply(Flatten.<Event>pCollections());
-
+        
         mergedCollections.apply(
-
-        ).apply(
+            "StatefulAggregationUSDTBSV", 
+            new StatefulCombineToBigquery(
+                "axiom-239308",
+                options.getOutputDataset(),
+                "okex_spot",
+                "USDT",
+                "BSV",
+                Duration.standardMinutes(5),
+                3
+            )
+        ).apply("ConvertToString", ParDo.of(new DoFn<TableRow, String>() {
+            @ProcessElement
+            public void processElement(ProcessContext c) {
+                c.output(c.element().toString());
+            }
+        })).apply(
             "Write Aggregated Features",
-            PubsubIO.writeMessages().to(options.getOutputTopic())
+            PubsubIO.writeStrings().to("output")
         );
         
         // write to file
         // Execute the pipeline and return the result.
         return p.run();
+    }
+
+    static class PubsubMessageToArchiveDoFn extends DoFn<PubsubMessage, AvroPubsubMessage> {
+        @ProcessElement
+        public void processElement(ProcessContext context) {
+          PubsubMessage message = context.element();
+          context.output(new AvroPubsubMessage(message.getPayload(), message.getAttributeMap(), context.timestamp().getMillis()));
+        }
     }
 
 }

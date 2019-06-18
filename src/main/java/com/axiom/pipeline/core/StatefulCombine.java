@@ -5,78 +5,25 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.beam.sdk.transforms.Combine;
-import org.apache.beam.sdk.coders.BigEndianLongCoder;
-import org.apache.beam.sdk.Pipeline;
-import org.apache.beam.sdk.PipelineResult;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
-import org.apache.beam.sdk.options.PipelineOptionsFactory;
+import com.axiom.pipeline.datum.Event;
+import com.google.api.services.bigquery.model.TableRow;
+import org.joda.time.Duration;
+import com.google.api.services.bigquery.model.TableRow;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.windowing.FixedWindows;
-import org.apache.beam.sdk.transforms.windowing.Window;
-import org.apache.beam.sdk.values.PCollectionTuple;
-
-import org.apache.beam.sdk.transforms.windowing.Window;
-import org.joda.time.Instant;
-import org.apache.beam.sdk.transforms.WithTimestamps;
-import org.apache.beam.sdk.io.AvroIO;
-import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
-import org.joda.time.Duration;
-import org.apache.beam.sdk.transforms.ParDo;
-import com.axiom.pipeline.util.Json.JsonException;
-import com.axiom.pipeline.util.Json;
-import org.apache.beam.sdk.transforms.Flatten;
-import org.apache.beam.sdk.values.PCollectionList;
-
-import com.google.common.collect.Lists;
-import org.apache.beam.sdk.schemas.transforms.Group;
-import org.apache.beam.sdk.schemas.Schema;
-import org.apache.beam.sdk.values.Row;
 import org.apache.beam.sdk.state.BagState;
 import org.apache.beam.sdk.state.TimerSpec;
 import org.apache.beam.sdk.state.TimerSpecs;
 import org.apache.beam.sdk.values.KV;
-import org.apache.beam.sdk.state.Timer;
-import org.apache.beam.sdk.state.StateSpec;
-import org.apache.beam.sdk.state.StateSpecs;
-import org.apache.beam.sdk.transforms.Sum;
-import org.apache.beam.sdk.state.TimeDomain;
+import org.apache.beam.sdk.transforms.windowing.FixedWindows;
+import org.apache.beam.sdk.transforms.windowing.Window;
+import org.joda.time.Instant;
+import org.apache.beam.sdk.values.Row;
+
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubMessage;
-import java.util.HashMap;
-import org.apache.beam.sdk.io.TextIO;
-import com.google.common.collect.ImmutableList;
-import java.util.Comparator;
-import java.util.Collections;
-
-import com.google.api.services.bigquery.model.TableSchema;
-import com.google.api.services.bigquery.model.TableRow;
-import com.google.api.services.bigquery.model.TableFieldSchema;
-import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
-import com.google.api.services.bigquery.model.TableReference;
-
-import com.axiom.pipeline.datum.AvroPubsubMessage;
-import org.apache.beam.sdk.state.ValueState;
-import org.apache.beam.sdk.state.MapState;
-import org.apache.beam.sdk.state.CombiningState;
-import java.util.stream.Stream;
-import java.util.stream.Collectors;
-import org.apache.beam.sdk.options.ValueProvider;
-import java.util.DoubleSummaryStatistics;
-import java.util.stream.Collector;
-import org.apache.beam.sdk.coders.MapCoder;
-import org.apache.beam.sdk.transforms.Combine.CombineFn;
-import org.apache.beam.sdk.coders.DoubleCoder;
-import java.util.ArrayList;
-import java.util.Map.Entry;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.axiom.pipeline.core.FeatureRow;
-import com.axiom.pipeline.util.Tuple;
-import com.axiom.pipeline.core.StatefulAggregationDoFn;
-import com.axiom.pipeline.core.FilterDuplicates;
+import org.apache.beam.sdk.transforms.PTransform;
+import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.transforms.WithTimestamps;
 
 public class StatefulCombine extends PTransform<PCollection<Event>, PCollection<TableRow>> {
     private static final Logger logger = LoggerFactory.getLogger(StatefulCombine.class);
@@ -104,40 +51,40 @@ public class StatefulCombine extends PTransform<PCollection<Event>, PCollection<
     }
 
     @Override
-    public PCollection<TableRow> expand(PCollection<Row> events){
+    public PCollection<TableRow> expand(PCollection<Event> events){
 
         return events
-            .apply("FilterRowsByExchange", ParDo.of(new DoFn<Row, Row>() {
+            .apply("FilterEventsByExchange", ParDo.of(new DoFn<Event, Event>() {
                 @ProcessElement
                 public void processElement(ProcessContext c) {
-                    if(c.element().getString("exchange").equals(exchange)){
+                    if(c.element().getExchange().equals(exchange)){
                         c.output(c.element());
                     }
                 }
             }))
-            .apply("FilterRowsBySymbol", ParDo.of(new DoFn<Row, Row>() {
+            .apply("FilterEventsBySymbol", ParDo.of(new DoFn<Event, Event>() {
                 @ProcessElement
                 public void processElement(ProcessContext c) {
-                    if(c.element().getString("symbol").equals(symbol)){
+                    if(c.element().getSymbol().equals(symbol)){
                         c.output(c.element());
                     }
                 }
             }))
             .apply(
-                "Add Row Timestamps",
+                "Add Event Timestamps",
                 WithTimestamps.of(
-                    (Row row) -> new Instant(row.getValue("time"))
+                    (Event event) -> new Instant(event.getTime())
                 )
             )
             .apply(
-                Window.<Row>into(
+                Window.<Event>into(
                     FixedWindows.of(interval)
                 )
             )
-            .apply("MapPartitionIdKey", ParDo.of(new DoFn<Row, KV<String, Row>>() {
+            .apply("MapRowPartitionIdKey", ParDo.of(new DoFn<Event, KV<String, Row>>() {
                 @ProcessElement
                 public void processElement(ProcessContext c) {
-                    c.output(KV.of(c.element().getValue("partition_id"), c.element()));
+                    c.output(KV.of(c.element().getPartitionString(), c.element().toRow()));
                 }
             }))
             .apply("StatefulAggregation", ParDo.of(new StatefulAggregationDoFn(

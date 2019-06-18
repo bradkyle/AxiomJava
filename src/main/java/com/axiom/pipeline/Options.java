@@ -22,10 +22,16 @@ public interface Options extends PipelineOptions, StreamingOptions {
     void setInputDirectory(ValueProvider<String> value);
 
     @Description("The output Bigquery dataset to output data to.")
-    @Required
+    @Default.String("")
     ValueProvider<String> getOutputDataset();
 
     void setOutputDataset(ValueProvider<String> value);
+
+    @Description("The directory to output files to. Must end with a slash.")
+    @Default.String("")
+    ValueProvider<String> getOutputDirectory();
+
+    void setOutputDirectory(ValueProvider<String> value);
 
     @Description("The directory to output files to. Must end with a slash.")
     @Required

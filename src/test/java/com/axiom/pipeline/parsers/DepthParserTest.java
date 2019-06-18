@@ -86,6 +86,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
+import com.axiom.pipeline.datum.Event;
+
 public class DepthParserTest {
     private static final Logger logger = LoggerFactory.getLogger(DepthParserTest.class);
 
@@ -113,15 +115,15 @@ public class DepthParserTest {
 
         PCollectionTuple results = DepthParser.process(stream);
 
-        PCollection<Row> valid = results.get(DepthParser.VALID);
+        PCollection<Event> valid = results.get(DepthParser.VALID);
         PCollection<Failure> failures = results.get(DepthParser.FAILURE);
 
-        Valid<Row> depthValidator = new Valid<Row>((datum) -> {
-                assertNotNull(datum.getString("symbol"));
-                assertTrue(datum.getString("exchange").equals("okex_spot"));
-                assertTrue(datum.getString("symbol").equals("PSTUSDT"));
-                assertNotNull(datum.getValue("price"));
-                assertNotNull(datum.getValue("quantity"));
+        Valid<Event> depthValidator = new Valid<Event>((datum) -> {
+                assertNotNull(datum.getSymbol());
+                assertTrue(datum.getExchange().equals("okex_spot"));
+                assertTrue(datum.getSymbol().equals("PSTUSDT"));
+                assertNotNull(datum.getPrice());
+                assertNotNull(datum.getQuantity());
                 // assertNotNull(datum.getTweetId());
                 // assertNotNull(datum.getTweetLang());
                 // assertNotNull(datum.getRetweetCount());

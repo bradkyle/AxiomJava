@@ -1,14 +1,17 @@
-mvn -X compile exec:java \
--Dexec.mainClass=com.axiom.pipeline.AxiomPipeline \
+mvn compile exec:java \
+-Dexec.mainClass=com.axiom.pipeline.AxiomPartition \
 -Dexec.cleanupDaemonThreads=false \
 -Dexec.args=" \
 --streaming=false \
 --project=axiom-239308 \
 --stagingLocation=gs://axiom-239308-test/temp/ \
+--avroTempDirectory=gs://axiom-239308-test/temp_avros/ \
 --tempLocation=gs://axiom-239308-test/staging/ \
---inputDirectory=gs://axiom-239308-coldline/raw_output/ \
 --autoscalingAlgorithm=THROUGHPUT_BASED \
---outputDataset=aggregations \
---numWorkers=25 \
---maxNumWorkers=55 \
+--inputDirectory=gs://axiom-239308-coldline/raw_output/ \
+--outputDirectory=gs://axiom-239308-coldline/output/partitioned/ \
+--outputDataset=testAggregations \
+--workerMachineType=n1-highmem-32 \
+--numWorkers=2 \
+--maxNumWorkers=30 \
 --runner=DataflowRunner"

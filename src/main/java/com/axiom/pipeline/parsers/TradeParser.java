@@ -40,14 +40,12 @@ public class TradeParser extends DoFn<AvroPubsubMessage, Event> {
                             try {
 
                                 AvroPubsubMessage msg = context.element();
-                                HashMap<String,Object> trade = Json.serializer().toMap(
-                                                msg.getPayload()
-                                );
+                                HashMap<String,Object> trade = Json.serializer().toMap(msg.getPayload());
 
                                 Double price = new Double(trade.get("price").toString());
                                 Double quantity = price * new Double(trade.get("quantity").toString());
 
-                                context.output(new Event(
+                                Event event = new Event(
                                     trade.get("exchange").toString(),
                                     "trade",
                                     trade.get("quote_asset").toString(),
@@ -56,7 +54,9 @@ public class TradeParser extends DoFn<AvroPubsubMessage, Event> {
                                     quantity,
                                     price,
                                     trade.get("side").toString()
-                                ));
+                                );
+                                
+                                context.output(VALID, event);
 
                             } catch (JsonException e) {
                                 fail(e, context);

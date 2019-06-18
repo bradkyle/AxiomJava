@@ -72,12 +72,18 @@ import org.apache.beam.sdk.state.MapState;
 import org.apache.beam.sdk.state.CombiningState;
 import java.util.stream.Stream;
 
+import com.axiom.pipeline.datum.Event;
+
+import org.apache.beam.sdk.transforms.Distinct;
+import org.apache.beam.sdk.transforms.SerializableFunction;
+import org.apache.beam.sdk.io.fs.ResourceId;
+import org.apache.beam.sdk.io.FileBasedSink;
+import org.apache.beam.sdk.options.ValueProvider.NestedValueProvider;
+import com.axiom.pipeline.io.EventDynamicDestinations;
 import com.axiom.pipeline.core.StatefulCombineToBigquery;
 
 public class AxiomBatch {
-    private static final Logger logger = LoggerFactory.getLogger(AxiomPipeline.class);
-
-    private static final CodecFactory DEFAULT_CODEC = CodecFactory.deflateCodec(9);
+    private static final Logger logger = LoggerFactory.getLogger(AxiomBatch.class);
 
     public static void main(String[] args) {
         Options options = PipelineOptionsFactory.fromArgs(args).withValidation().as(Options.class);
@@ -88,13 +94,12 @@ public class AxiomBatch {
         // Create the pipeline
         Pipeline p = Pipeline.create(options);
 
-        // ==================================================================>
-        // Trades
-        // ==================================================================>
-        // Read trades from trades directory on google cloud storage
-
-        PCollectionList<Row> collectionList = PCollectionList.of(validTrades).and(validDepths);
-        PCollection<Row> mergedCollections = collectionList.apply(Flatten.<Row>pCollections());
+        PCollection<Event> eventStream =
+            p.apply(
+                AvroIO.read(Event.class)
+                .from(options.getInputDirectory())
+                .withHintMatchesManyFiles()
+            );
 
         mergedCollections.apply(
             "StatefulAggregationUSDTBSV", 
@@ -104,7 +109,7 @@ public class AxiomBatch {
                 "okex_spot",
                 "USDT",
                 "BSV",
-                Duration.standardSeconds(30),
+                Duration.standardMinutes(5),
                 5
             )
         ); 

@@ -17,6 +17,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import org.apache.avro.reflect.Nullable;
 import java.util.Arrays;
+import org.apache.beam.sdk.schemas.Schema;
+import org.apache.beam.sdk.values.Row;
+import java.util.Objects;
 
 @DefaultCoder(AvroCoder.class)
 public class Event extends DoFn{
@@ -29,17 +32,6 @@ public class Event extends DoFn{
     private Double quantity;
     private Double price;
     private String side;
-
-    private Schema schema = Schema.builder()
-        .addStringField("event_type")
-        .addStringField("exchange")
-        .addStringField("quote_asset")
-        .addStringField("base_asset")
-        .addInt64Field("time")
-        .addDoubleField("quantity")
-        .addDoubleField("price")
-        .addStringField("side")
-        .build();
 
     // Private empty constructor used for reflection required by AvroIO.
     @SuppressWarnings("unused")
@@ -74,7 +66,7 @@ public class Event extends DoFn{
     }
 
     public String getEventType() {
-        return this.eventId;
+        return this.eventType;
     }
 
     public void setEventType(String eventType) {
@@ -90,11 +82,15 @@ public class Event extends DoFn{
     }
 
     public String getBaseAsset() {
-        return this.quoteAsset;
+        return this.baseAsset;
     }
 
     public void setBaseAsset(String baseAsset) {
         this.baseAsset = baseAsset;
+    }
+
+    public String getSymbol() {
+        return this.baseAsset+this.quoteAsset;
     }
 
     public String getSide() {
@@ -138,8 +134,47 @@ public class Event extends DoFn{
         );
     }
 
-    public class Partition {
-        public Partiton(
+    public String getPartitionString() {
+        return MoreObjects.toStringHelper(this)
+        .add("exchange",exchange)
+        .add("eventType",eventType)
+        .add("quoteAsset",quoteAsset)
+        .add("baseAsset",baseAsset)
+        .toString();
+    }
+
+    public String getFile() {
+        return String.join(
+            "_",
+            this.getExchange(),
+            this.getQuoteAsset(),
+            this.getBaseAsset(),
+            this.getEventType()
+        );
+    }
+
+    public String getDir() {
+        return String.join(
+            "/",
+            this.getExchange(),
+            this.getQuoteAsset(),
+            this.getBaseAsset(),
+            this.getEventType()
+        );
+    }
+
+    @DefaultCoder(AvroCoder.class)
+    public static class Partition {
+        private String exchange;
+        private String eventType;
+        private String quoteAsset;
+        private String baseAsset;
+
+        // Private empty constructor used for reflection required by AvroIO.
+        @SuppressWarnings("unused")
+        private Partition() {}
+
+        public Partition(
             String exchange,
             String eventType,
             String quoteAsset,
@@ -164,20 +199,52 @@ public class Event extends DoFn{
         }
 
         public String getEventType() {
-            return this.eventId;
+            return this.eventType;
         }
+
+        public String getFile() {
+            return String.join(
+                "_",
+                this.getExchange(),
+                this.getQuoteAsset(),
+                this.getBaseAsset(),
+                this.getEventType()
+            );
+        }
+
+        public String getDir() {
+            return String.join(
+                "/",
+                this.getExchange(),
+                this.getQuoteAsset(),
+                this.getBaseAsset(),
+                this.getEventType()
+            );
+        }
+
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            exchange, 
+            eventType, 
+            quoteAsset,
+            baseAsset,
+            time,
+            quantity,
+            price,
+            side
+        );
     }
 
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this)
-            .add("eventId",eventId)
-            .add("partitionId",partitionId)
             .add("exchange",exchange)
             .add("eventType",eventType)
             .add("quoteAsset",quoteAsset)
             .add("baseAsset",baseAsset)
-            .add("symbol",symbol)
             .add("time",time)
             .add("quantity",quantity)
             .add("price",price)
@@ -186,6 +253,16 @@ public class Event extends DoFn{
     }
 
     public Row toRow() {
+        Schema schema = Schema.builder()
+            .addStringField("event_type")
+            .addStringField("exchange")
+            .addStringField("quote_asset")
+            .addStringField("base_asset")
+            .addInt64Field("time")
+            .addDoubleField("quantity")
+            .addDoubleField("price")
+            .addStringField("side")
+            .build();
         return Row.withSchema(schema)
             .addValues(
                 this.getEventType(),
