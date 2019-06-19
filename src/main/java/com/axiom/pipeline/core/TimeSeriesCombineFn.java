@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
+
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.coders.BigEndianLongCoder;
 import org.apache.beam.sdk.Pipeline;
@@ -61,7 +62,6 @@ import com.axiom.pipeline.datum.AvroPubsubMessage;
 import org.apache.beam.sdk.state.ValueState;
 import org.apache.beam.sdk.state.MapState;
 import org.apache.beam.sdk.state.CombiningState;
-import com.axiom.pipeline.core.FeatureSchema;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.options.ValueProvider;
@@ -73,72 +73,56 @@ import org.apache.beam.sdk.coders.DoubleCoder;
 import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.Arrays;
+
+import com.axiom.pipeline.core.FeatureRow;
+import com.axiom.pipeline.util.Tuple;
+import org.apache.beam.sdk.coders.AvroCoder;
+
+import org.ta4j.core.BaseBar;
+import org.ta4j.core.BaseTimeSeries;
+import org.ta4j.core.Bar;
+import org.ta4j.core.TimeSeries;
+
 import com.axiom.pipeline.datum.Event;
 
-import com.axiom.pipeline.core.StatefulCombine;
+public class TimeSeriesCombineFn extends CombineFn<Bar, TimeSeries, TimeSeries> {
 
-public class StatefulCombineToBigquery extends PTransform<PCollection<Event>, PCollection<TableRow>> {
-    private static final Logger logger = LoggerFactory.getLogger(StatefulCombine.class);
+    final int maxSize;
 
-    final String projectId;
-    final String datasetId;
-    final String exchange;
-    final String quote_asset;
-    final String base_asset;
-    final String symbol;
-    final Duration interval;
-    final TableReference tableSpec;
-    final Integer numLevels;
-
-    public StatefulCombineToBigquery(
-        String projectId,
-        String datasetId,
-        String exchange,
-        String quote_asset,
-        String base_asset,
-        Duration interval,
-        int numLevels
+    public TimeSeriesCombineFn(
+        int maxSize
     ) {
-        this.datasetId=datasetId;
-        this.projectId=projectId;
-        this.exchange=exchange;
-        this.quote_asset=quote_asset;
-        this.base_asset=base_asset;
-        this.symbol=base_asset+quote_asset;
-        this.interval=interval;
-        this.numLevels=numLevels;
-
-        this.tableSpec =
-            new TableReference()
-                .setProjectId(projectId)
-                .setDatasetId(datasetId)
-                .setTableId(String.join("_", Arrays.asList(exchange, quote_asset, base_asset, interval.toString())));
+        this.maxSize = maxSize;
     }
 
     @Override
-    public PCollection<TableRow> expand(PCollection<Event> mergedCollections){
-
-        PCollection<TableRow> aggregation = mergedCollections.apply(
-                "StatefulAggregation", 
-                new StatefulCombine(
-                    exchange,
-                    quote_asset,
-                    base_asset,
-                    interval,
-                    numLevels
-                )
-            );
-
-         // To bigquery
-        aggregation
-          .apply(
-            BigQueryIO.writeTableRows()
-            .to(tableSpec)
-            .withSchema(FeatureSchema.FEATURE_SCHEMA)
-            .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
-            .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_TRUNCATE));
-
-        return aggregation;
+    public TimeSeries createAccumulator() {
+        TimeSeries timeSeries = new BaseTimeSeries();
+        timeSeries.setMaximumBarCount(this.maxSize);
+        return timeSeries;
     }
+
+    @Override
+    public TimeSeries addInput(TimeSeries accumulator, Bar input) {
+        accumulator.addBar(input);
+        return accumulator;
+    }
+
+    @Override
+    public TimeSeries mergeAccumulators(Iterable<TimeSeries> accumulators) {
+        TimeSeries timeSeries = new BaseTimeSeries();
+        for (TimeSeries t : accumulators) {
+            List<Bar> bars = t.getBarData();
+            for (Bar bar : bars) {
+                timeSeries.addBar(bar);
+            }
+        }
+        return timeSeries;
+    }
+
+    @Override
+    public TimeSeries extractOutput(TimeSeries accumulator) {
+        return accumulator;
+    }
+
 }

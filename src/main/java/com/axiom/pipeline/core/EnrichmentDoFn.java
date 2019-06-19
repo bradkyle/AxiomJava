@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
+
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.coders.BigEndianLongCoder;
 import org.apache.beam.sdk.Pipeline;
@@ -61,7 +62,6 @@ import com.axiom.pipeline.datum.AvroPubsubMessage;
 import org.apache.beam.sdk.state.ValueState;
 import org.apache.beam.sdk.state.MapState;
 import org.apache.beam.sdk.state.CombiningState;
-import com.axiom.pipeline.core.FeatureSchema;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.options.ValueProvider;
@@ -73,72 +73,88 @@ import org.apache.beam.sdk.coders.DoubleCoder;
 import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.Arrays;
+
+import com.axiom.pipeline.core.FeatureRow;
+import com.axiom.pipeline.util.Tuple;
+import org.apache.beam.sdk.coders.AvroCoder;
+
+import org.ta4j.core.BaseBar;
+import org.ta4j.core.BaseTimeSeries;
+import org.ta4j.core.Bar;
+import org.ta4j.core.TimeSeries;
+
 import com.axiom.pipeline.datum.Event;
+import com.axiom.pipeline.core.TimeSeriesCombineFn;
 
-import com.axiom.pipeline.core.StatefulCombine;
+public class EnrichmentDoFn extends DoFn<KV<String,Event>, Double>{
+    private static final Logger logger = LoggerFactory.getLogger(EnrichmentDoFn.class);
 
-public class StatefulCombineToBigquery extends PTransform<PCollection<Event>, PCollection<TableRow>> {
-    private static final Logger logger = LoggerFactory.getLogger(StatefulCombine.class);
+    // @StateId("ticks")
+    // private final StateSpec<CombiningState<Bar, TimeSeries, TimeSeries>> tickStateSpec = StateSpecs.combining(
+    //     AvroCoder.of(TimeSeries.class),
+    //     new TimeSeriesCombineFn(300)
+    // );
 
-    final String projectId;
-    final String datasetId;
-    final String exchange;
-    final String quote_asset;
-    final String base_asset;
-    final String symbol;
-    final Duration interval;
-    final TableReference tableSpec;
-    final Integer numLevels;
+    // @StateId("trade_buffer")
+    // private final StateSpec<BagState<Event>> bufferedTrades = StateSpecs.bag();
 
-    public StatefulCombineToBigquery(
-        String projectId,
-        String datasetId,
-        String exchange,
-        String quote_asset,
-        String base_asset,
-        Duration interval,
-        int numLevels
+    // @StateId("depth_buffer")
+    // private final StateSpec<BagState<Event>> bufferedDepths = StateSpecs.bag();
+
+    @TimerId("expiry")
+    private final TimerSpec expirySpec = TimerSpecs.timer(TimeDomain.EVENT_TIME);
+
+    @StateId("windowEnd")
+    private final StateSpec<ValueState<Long>> windowEndState = StateSpecs.value();
+
+    @ProcessElement
+    public void process(
+        ProcessContext context,
+        BoundedWindow window,
+        // @StateId("trade_buffer") BagState<Event> depthBufferState,
+        // @StateId("depth_buffer") BagState<Event> tradeBufferState,
+        @StateId("windowEnd") ValueState<Long> windowEndState,
+        @TimerId("expiry") Timer expiryTimer
     ) {
-        this.datasetId=datasetId;
-        this.projectId=projectId;
-        this.exchange=exchange;
-        this.quote_asset=quote_asset;
-        this.base_asset=base_asset;
-        this.symbol=base_asset+quote_asset;
-        this.interval=interval;
-        this.numLevels=numLevels;
+        // Set end of window
+        windowEndState.write(Long.valueOf(window.maxTimestamp().getMillis()));
+        expiryTimer.set(window.maxTimestamp());
+        
+        // Get the event and store it in a buffer
+        Event event = context.element().getValue();
 
-        this.tableSpec =
-            new TableReference()
-                .setProjectId(projectId)
-                .setDatasetId(datasetId)
-                .setTableId(String.join("_", Arrays.asList(exchange, quote_asset, base_asset, interval.toString())));
+        // if (event.getEventType().equals("trade")) {
+        //     tradeBufferState.add(event);
+        // } else if (event.getEventType().equals("levelUpdate")) {
+        //     depthBufferState.add(event);                        
+        // } else {
+        //     logger.error("Event type not supported");
+        // }
     }
 
-    @Override
-    public PCollection<TableRow> expand(PCollection<Event> mergedCollections){
+    @OnTimer("expiry")
+    public void onExpiry(
+        OnTimerContext context,                    
+        // @StateId("trade_buffer") BagState<Event> depthBufferState,
+        // @StateId("depth_buffer") BagState<Event> tradeBufferState,
+        @StateId("windowEnd") ValueState<Long> windowEndState
+        // @StateId("ticks") CombiningState<Bar, TimeSeries, TimeSeries> tickState
+    ){
 
-        PCollection<TableRow> aggregation = mergedCollections.apply(
-                "StatefulAggregation", 
-                new StatefulCombine(
-                    exchange,
-                    quote_asset,
-                    base_asset,
-                    interval,
-                    numLevels
-                )
-            );
+        // if (!tradeBufferState.isEmpty().read()) {
+        //     for (Event trade : tradeBufferState.read()) {
+                
+        //     }
+        // }
 
-         // To bigquery
-        aggregation
-          .apply(
-            BigQueryIO.writeTableRows()
-            .to(tableSpec)
-            .withSchema(FeatureSchema.FEATURE_SCHEMA)
-            .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
-            .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_TRUNCATE));
+        // TimeSeries series = tickState.read();
 
-        return aggregation;
+        // ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
+
+        // System.out.println(closePrice.getValue(0).toString())
+
+        context.output(new Double(0));
+
     }
+
 }

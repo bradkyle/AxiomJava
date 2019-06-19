@@ -54,22 +54,6 @@ public class StatefulCombine extends PTransform<PCollection<Event>, PCollection<
     public PCollection<TableRow> expand(PCollection<Event> events){
 
         return events
-            .apply("FilterEventsByExchange", ParDo.of(new DoFn<Event, Event>() {
-                @ProcessElement
-                public void processElement(ProcessContext c) {
-                    if(c.element().getExchange().equals(exchange)){
-                        c.output(c.element());
-                    }
-                }
-            }))
-            .apply("FilterEventsBySymbol", ParDo.of(new DoFn<Event, Event>() {
-                @ProcessElement
-                public void processElement(ProcessContext c) {
-                    if(c.element().getSymbol().equals(symbol)){
-                        c.output(c.element());
-                    }
-                }
-            }))
             .apply(
                 "Add Event Timestamps",
                 WithTimestamps.of(

@@ -176,7 +176,7 @@ public class AxiomPartition {
                 .withNaming(key -> FileIO.Write.defaultNaming(key, ".avro"))
                 .withDestinationCoder(StringUtf8Coder.of())
                 // .withTempDirectory(String.format("gs://bucket/tmp%s/%s/", suffix, currentMillisString))
-                .withNumShards(1)
+                .withNumShards(10)
         );
 
         

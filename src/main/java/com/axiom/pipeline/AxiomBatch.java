@@ -5,9 +5,6 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.axiom.pipeline.Options;
-
 import org.apache.avro.file.CodecFactory;
 
 import org.apache.beam.sdk.transforms.Combine;
@@ -33,7 +30,6 @@ import org.joda.time.Instant;
 import org.apache.beam.sdk.transforms.WithTimestamps;
 import org.apache.beam.sdk.io.AvroIO;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
-import org.joda.time.Duration;
 import org.apache.beam.sdk.transforms.ParDo;
 import com.axiom.pipeline.util.Json.JsonException;
 import com.axiom.pipeline.util.Json;
@@ -82,8 +78,69 @@ import org.apache.beam.sdk.options.ValueProvider.NestedValueProvider;
 import com.axiom.pipeline.io.EventDynamicDestinations;
 import com.axiom.pipeline.core.StatefulCombineToBigquery;
 
+import org.apache.beam.sdk.options.StreamingOptions;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.Default;
+import org.apache.beam.sdk.options.Description;
+import org.apache.beam.sdk.options.Validation.Required;
+import org.apache.beam.sdk.options.ValueProvider;
+import org.apache.beam.sdk.extensions.gcp.options.GcpOptions;
+
+import com.axiom.pipeline.util.Duration;
+
 public class AxiomBatch {
     private static final Logger logger = LoggerFactory.getLogger(AxiomBatch.class);
+
+    public interface Options extends PipelineOptions, StreamingOptions, GcpOptions {
+
+        @Description("The Quote asset to use")
+        @Required
+        ValueProvider<String> getQuote();
+
+        void setQuote(ValueProvider<String> value);
+
+        @Description("The Base asset to use")
+        @Required
+        ValueProvider<String> getBase();
+
+        void setBase(ValueProvider<String> value);
+
+        @Description("The exchange to process")
+        @Required
+        ValueProvider<String> getExchange();
+
+        void setExchange(ValueProvider<String> value);
+
+        @Description("The directory from which avro files will be collected. Must end with a slash.")
+        @Required
+        ValueProvider<String> getInputDirectory();
+
+        void setInputDirectory(ValueProvider<String> value);
+
+        @Description("The output Bigquery dataset to output data to.")
+        @Default.String("aggregations")
+        ValueProvider<String> getOutputDataset();
+
+        void setOutputDataset(ValueProvider<String> value);
+
+        @Description("The maximum number of levels to aggregate")
+        @Default.Integer(5)
+        Integer getNumLevels();
+
+        void setNumLevels(Integer value);
+
+        @Description(
+            "The window duration in which data will be written. Defaults to 5m. "
+                + "Allowed formats are: "
+                + "Ns (for seconds, example: 5s), "
+                + "Nm (for minutes, example: 12m), "
+                + "Nh (for hours, example: 2h).")
+        @Default.String("5m")
+        String getWindowDuration();
+
+        void setWindowDuration(String value);
+
+    }
 
     public static void main(String[] args) {
         Options options = PipelineOptionsFactory.fromArgs(args).withValidation().as(Options.class);
@@ -94,25 +151,36 @@ public class AxiomBatch {
         // Create the pipeline
         Pipeline p = Pipeline.create(options);
 
+        String inputDir = String.join(
+            "/",
+            options.getInputDirectory().get(),
+            options.getExchange().get(),
+            options.getQuote().get(),
+            options.getBase().get(),
+            "*"
+        );
+
+        System.out.println(inputDir);
+
         PCollection<Event> eventStream =
             p.apply(
                 AvroIO.read(Event.class)
-                .from(options.getInputDirectory())
+                .from(inputDir)
                 .withHintMatchesManyFiles()
             );
 
-        mergedCollections.apply(
+        eventStream.apply(
             "StatefulAggregationUSDTBSV", 
             new StatefulCombineToBigquery(
-                "axiom-239308",
-                options.getOutputDataset(),
-                "okex_spot",
-                "USDT",
-                "BSV",
-                Duration.standardMinutes(5),
-                5
+                options.getProject(),
+                options.getOutputDataset().get(),
+                options.getExchange().get(),
+                options.getQuote().get(),
+                options.getBase().get(),
+                Duration.parseDuration(options.getWindowDuration()),                
+                options.getNumLevels()
             )
-        ); 
+        );
         
         // write to file
         // Execute the pipeline and return the result.

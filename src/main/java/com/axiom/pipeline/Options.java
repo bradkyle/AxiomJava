@@ -15,6 +15,30 @@ public interface Options extends PipelineOptions, StreamingOptions {
 
     void setInputTopic(ValueProvider<String> value);
 
+    @Description("The Quote asset to use")
+    @Required
+    ValueProvider<String> getQuote();
+
+    void setQuote(ValueProvider<String> value);
+
+    @Description("The Base asset to use")
+    @Required
+    ValueProvider<String> getBase();
+
+    void setBase(ValueProvider<String> value);
+
+    @Description("The exchange to process")
+    @Required
+    ValueProvider<String> getExchange();
+
+    void setExchange(ValueProvider<String> value);
+
+    @Description("The google cloud project")
+    @Required
+    ValueProvider<String> getProject();
+
+    void setProject(ValueProvider<String> value);
+
     @Description("The directory from which avro files will be collected. Must end with a slash.")
     @Required
     ValueProvider<String> getInputDirectory();
@@ -66,6 +90,12 @@ public interface Options extends PipelineOptions, StreamingOptions {
 
     void setNumShards(Integer value);
 
+    @Description("The maximum number of levels to aggregate")
+    @Default.Integer(5)
+    Integer getNumLevels();
+
+    void setNumLevels(Integer value);
+
     @Description(
         "The window duration in which data will be written. Defaults to 5m. "
             + "Allowed formats are: "
@@ -73,9 +103,9 @@ public interface Options extends PipelineOptions, StreamingOptions {
             + "Nm (for minutes, example: 12m), "
             + "Nh (for hours, example: 2h).")
     @Default.String("5m")
-    String getOutputWriteWindowDuration();
+    String getWindowDuration();
 
-    void setOutputWriteWindowDuration(String value);
+    void setWindowDuration(String value);
 
     @Description(
         "The window duration in which data will be written. Defaults to 5m. "
@@ -83,7 +113,7 @@ public interface Options extends PipelineOptions, StreamingOptions {
             + "Ns (for seconds, example: 5s), "
             + "Nm (for minutes, example: 12m), "
             + "Nh (for hours, example: 2h).")
-    @Default.String("30m")
+    @Default.String("5m")
     String getFailureWriteWindowDuration();
 
     void setFailureWriteWindowDuration(String value);
